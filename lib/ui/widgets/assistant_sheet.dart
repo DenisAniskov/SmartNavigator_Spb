@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:smart_navigator_spb/core/constants/app_colors.dart';
 import 'package:smart_navigator_spb/data/models/assistant_model.dart';
 import 'package:smart_navigator_spb/providers/assistant_provider.dart';
+import 'package:smart_navigator_spb/services/assistant/assistant_model_roles.dart';
 import 'package:smart_navigator_spb/ui/widgets/assistant_markdown.dart';
 
 /// Built-in assistant conversation. It never speaks, reads GPS or builds a
@@ -630,6 +631,12 @@ class _AssistantSheetState extends State<AssistantSheet> {
                 ),
               ),
             if (reply != null) ...[
+              // Attached only to the server-confirmed answer of the recognised
+              // backup model; provisional text and failures never reach here.
+              if (AssistantModelRoles.isBackup(reply.model)) ...[
+                const SizedBox(height: 8),
+                _backupNotice(palette),
+              ],
               if (reply.warnings.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 for (final warning in reply.warnings.take(3))
@@ -679,6 +686,38 @@ class _AssistantSheetState extends State<AssistantSheet> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  /// Informational callout under a completed answer of the backup model.
+  /// Palette-driven colours keep it readable in both themes; the expanded
+  /// text wraps on narrow screens and scales with the system font setting.
+  Widget _backupNotice(AppPalette palette) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        color: palette.accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: palette.accent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 16, color: palette.accent),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Ответ подготовлен резервной моделью. Некоторые сведения могут '
+              'быть менее точными — рекомендуем проверять важные факты.',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.35,
+                color: palette.textPrimary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

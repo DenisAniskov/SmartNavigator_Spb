@@ -276,7 +276,7 @@ void main() {
     expect(gradle, contains("applicationId 'ru.smartnavigator.spb'"));
 
     final pubspec = File('${_packageRoot().path}/pubspec.yaml').readAsStringSync();
-    expect(pubspec, contains('version: 1.0.0+1'));
+    expect(pubspec, contains('version: 1.1.0+2'));
     expect(pubspec, contains('Петербург в деталях'));
   });
 

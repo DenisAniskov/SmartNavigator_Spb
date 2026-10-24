@@ -13,6 +13,10 @@ class PlacesRepository {
   PlacesRepository({ApiClient? apiClient})
     : _apiClient = apiClient ?? ApiClient();
 
+  /// Host for the provider's lightweight connectivity probe (P2): a DNS
+  /// resolution attempt, never a request to the backend itself.
+  String get connectivityHost => Uri.parse(_apiClient.currentBaseUrl).host;
+
   Future<List<PlaceModel>> getPlaces({
     List<PlaceCategoryEnum>? categories,
     bool? isUnusual,

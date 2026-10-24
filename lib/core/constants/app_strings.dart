@@ -5,6 +5,12 @@ class AppStrings {
       'Пешеходный навигатор для знакомства с Санкт-Петербургом';
   static const String appSlogan = 'Замечай больше. Открывай Петербург.';
 
+  // «О приложении»: открываются только по явному нажатию пользователя, во
+  // внешнем браузере, без параметров и идентификаторов (P3).
+  static const String officialWebsiteUrl = 'https://spb-in-details.vercel.app/';
+  static const String projectGithubUrl =
+      'https://github.com/DenisAniskov/SPb_in_Details_public';
+
   // Поиск и фильтры
   static const String filterUnusual = '✨ Необычные места';
 

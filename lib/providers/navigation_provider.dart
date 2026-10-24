@@ -129,10 +129,7 @@ class NavigationProvider extends ChangeNotifier {
   /// A recoverable loss of location. The route, leg index and progress stay
   /// intact; only guidance and arrival/off-route confirmation are suspended
   /// until a fresh validated fix is accepted.
-  void _enterGpsWaiting(
-    String message, {
-    bool detachPositionStream = true,
-  }) {
+  void _enterGpsWaiting(String message, {bool detachPositionStream = true}) {
     _clearFixStreaks();
     if (detachPositionStream) _detachPositionStream();
     // A native reroute may outlive its authorization. The old route stays on
@@ -261,22 +258,32 @@ class NavigationProvider extends ChangeNotifier {
     // one-shot fix is pending is not lost.
     _ensureServiceStatusSubscription(revision);
     try {
+      // P1: settle the location permission BEFORE probing the service. The
+      // probe describes provider availability, not the user's access choice,
+      // and can report the service off (fused-provider flake, both OS
+      // provider flags off) while the permission is still askable — gating
+      // the request behind it made a fresh install start a session silently
+      // with no dialog, and the waiting state never asks again. The dialog
+      // is offered at most once per start; recovery only re-checks silently.
+      final permission = await _locationService.requestPermission();
+      if (!_validRun(revision)) return;
+      if (!_granted(permission)) {
+        _enterGpsWaiting(switch (permission) {
+          LocationPermissionStatus.permanentlyDenied =>
+            'Доступ к местоположению запрещён. Разрешите его в настройках.',
+          LocationPermissionStatus.serviceDisabled =>
+            'Ожидаем местоположение. Включите геолокацию.',
+          _ =>
+            'Нет разрешения на доступ к геолокации. Навигация '
+                'продолжится после разрешения.',
+        });
+        _startWatchdog(revision);
+        return;
+      }
       final enabled = await _locationService.isLocationServiceEnabled();
       if (!_validRun(revision)) return;
       if (!enabled) {
         _enterGpsWaiting('Ожидаем местоположение. Включите геолокацию.');
-        _startWatchdog(revision);
-        return;
-      }
-      final permission = await _locationService.requestPermission();
-      if (!_validRun(revision)) return;
-      if (!_granted(permission)) {
-        _enterGpsWaiting(
-          permission == LocationPermissionStatus.permanentlyDenied
-              ? 'Доступ к местоположению запрещён. Разрешите его в настройках.'
-              : 'Нет разрешения на доступ к геолокации. Навигация продолжится '
-                    'после разрешения.',
-        );
         _startWatchdog(revision);
         return;
       }
@@ -360,9 +367,7 @@ class NavigationProvider extends ChangeNotifier {
           (enabled) {
             if (!_validRun(revision) || !_observesLocation) return;
             if (!enabled) {
-              _enterGpsWaiting(
-                'Ожидаем местоположение. Включите геолокацию.',
-              );
+              _enterGpsWaiting('Ожидаем местоположение. Включите геолокацию.');
               return;
             }
             unawaited(_recoverLocation(revision));
@@ -397,8 +402,7 @@ class NavigationProvider extends ChangeNotifier {
       final permission = await _locationService.checkPermission();
       if (!_validRun(revision) || !_observesLocation) return;
       if (!_granted(permission)) {
-        final message =
-            permission == LocationPermissionStatus.permanentlyDenied
+        final message = permission == LocationPermissionStatus.permanentlyDenied
             ? 'Доступ к местоположению запрещён. Разрешите его в настройках.'
             : 'Нет разрешения на доступ к геолокации. Навигация продолжится '
                   'после разрешения.';
@@ -415,9 +419,7 @@ class NavigationProvider extends ChangeNotifier {
       _subscribe(revision);
       _ensureServiceStatusSubscription(revision);
       if (!_state.isWaitingForGps) return;
-      _state = _state.copyWith(
-        errorMessage: 'Ожидаем свежий сигнал GPS.',
-      );
+      _state = _state.copyWith(errorMessage: 'Ожидаем свежий сигнал GPS.');
       _publish();
       // A one-shot fix is the fastest way to resume; it is still validated by
       // [_process] (freshness, accuracy, timestamp ordering).
@@ -617,7 +619,8 @@ class NavigationProvider extends ChangeNotifier {
   int _advanceManeuverIndex(RouteLegModel leg, double progress) {
     var index = _state.currentManeuverIndex;
     while (index < leg.maneuvers.length &&
-        progress > leg.maneuvers[index].offsetMeters + maxProgressRewindMeters) {
+        progress >
+            leg.maneuvers[index].offsetMeters + maxProgressRewindMeters) {
       index++;
     }
     return index;
@@ -864,8 +867,9 @@ class NavigationProvider extends ChangeNotifier {
       // re-stamped with the rebuilt leg's index; every maneuver that belonged
       // to the obsolete geometry is discarded with it.
       maneuvers: List.unmodifiable(
-        (sourceLeg?.maneuvers ?? const <PedestrianManeuverModel>[])
-            .map((m) => m.withLegIndex(legIndex)),
+        (sourceLeg?.maneuvers ?? const <PedestrianManeuverModel>[]).map(
+          (m) => m.withLegIndex(legIndex),
+        ),
       ),
       visitMinutes: oldLeg.visitMinutes,
     );

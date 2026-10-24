@@ -8,6 +8,12 @@ import 'package:smart_navigator_spb/data/models/user_location_state.dart';
 abstract class BaseDeviceLocationService {
   Future<bool> isLocationServiceEnabled();
   Future<LocationPermissionStatus> checkPermission();
+
+  /// Settles the location permission and may surface the system dialog. It
+  /// must NOT be gated by location-service availability: service state
+  /// describes providers, not the user's access choice, and a false probe
+  /// must never silently skip the dialog (P1). Availability is checked by
+  /// the caller after the permission is settled.
   Future<LocationPermissionStatus> requestPermission();
   Future<UserLocationSnapshot?> getLastKnownPosition();
   Future<UserLocationSnapshot> getCurrentPosition({
@@ -43,13 +49,13 @@ class DeviceLocationService implements BaseDeviceLocationService {
 
   @override
   Future<LocationPermissionStatus> requestPermission() async {
-    final isEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!isEnabled) {
-      return LocationPermissionStatus.serviceDisabled;
-    }
-
+    // No service-availability gate here: the probe describes provider state,
+    // not the user's access choice, and a false or transiently failing probe
+    // must never silently skip the system dialog (P1). The caller checks
+    // service availability after the permission is settled.
     var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.unableToDetermine) {
       permission = await Geolocator.requestPermission();
     }
     return _mapPermission(permission);

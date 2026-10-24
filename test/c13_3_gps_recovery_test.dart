@@ -26,8 +26,7 @@ class _RecoveryLocation implements BaseDeviceLocationService {
 
   bool serviceEnabled = true;
   bool failCurrent = false;
-  LocationPermissionStatus permission =
-      LocationPermissionStatus.grantedPrecise;
+  LocationPermissionStatus permission = LocationPermissionStatus.grantedPrecise;
   UserLocationSnapshot? current;
   late final StreamController<UserLocationSnapshot> positions;
   late final StreamController<bool> serviceStatus;
@@ -90,19 +89,15 @@ UserLocationSnapshot _fix({
   coordinate: GeoCoord(latitude, longitude),
   accuracy: accuracy,
   timestamp:
-      timestamp ?? DateTime.now().subtract(age).add(
-        Duration(milliseconds: ++_sequence),
-      ),
+      timestamp ??
+      DateTime.now().subtract(age).add(Duration(milliseconds: ++_sequence)),
   isCached: cached,
 );
 
 const _route = PedestrianRouteModel(
   distanceMeters: 600,
   durationSeconds: 400,
-  geometryPoints: [
-    GeoCoord(60.0000, 30.0),
-    GeoCoord(60.0027, 30.0),
-  ],
+  geometryPoints: [GeoCoord(60.0000, 30.0), GeoCoord(60.0027, 30.0)],
   steps: [],
   legs: [
     RouteLegModel(
@@ -110,10 +105,7 @@ const _route = PedestrianRouteModel(
       toTitle: 'Эрмитаж',
       distanceMeters: 600,
       durationSeconds: 400,
-      geometryPoints: [
-        GeoCoord(60.0000, 30.0),
-        GeoCoord(60.0027, 30.0),
-      ],
+      geometryPoints: [GeoCoord(60.0000, 30.0), GeoCoord(60.0027, 30.0)],
     ),
   ],
   placesCount: 1,
@@ -205,14 +197,9 @@ void main() {
 
     // Stale and cached frames are also not proof of recovery.
     device.positions.add(
-      _fix(
-        latitude: 60.0005,
-        age: const Duration(seconds: 40),
-      ),
+      _fix(latitude: 60.0005, age: const Duration(seconds: 40)),
     );
-    device.positions.add(
-      _fix(latitude: 60.0005, cached: true),
-    );
+    device.positions.add(_fix(latitude: 60.0005, cached: true));
     await pumpEventQueue();
     expect(nav.status, NavigationStatus.waitingForGps);
 
@@ -221,30 +208,35 @@ void main() {
     expect(nav.status, NavigationStatus.active);
   });
 
-  test('permission denial waits without repeated permission prompts', () async {
-    device
-      ..serviceEnabled = false
-      ..permission = LocationPermissionStatus.denied;
-    await nav.startNavigation(_route);
-    expect(nav.status, NavigationStatus.waitingForGps);
-    // No permission dialog while the location service itself is off.
-    expect(device.permissionRequests, 0);
+  test(
+    'navigation start asks for access once, recovery never re-asks',
+    () async {
+      device
+        ..serviceEnabled = false
+        ..permission = LocationPermissionStatus.denied;
+      await nav.startNavigation(_route);
+      expect(nav.status, NavigationStatus.waitingForGps);
+      // P1: navigation itself settles the permission even while the service
+      // probe is off — exactly one request per start.
+      expect(device.permissionRequests, 1);
 
-    device.serviceEnabled = true;
-    device.serviceStatus.add(true);
-    await pumpEventQueue();
-    expect(nav.status, NavigationStatus.waitingForGps);
-    expect(device.permissionRequests, 0);
-    expect(device.positionListens, 0);
+      device.serviceEnabled = true;
+      device.serviceStatus.add(true);
+      await pumpEventQueue();
+      expect(nav.status, NavigationStatus.waitingForGps);
+      // No repeated system dialogs while the access is still missing.
+      expect(device.permissionRequests, 1);
+      expect(device.positionListens, 0);
 
-    device.permission = LocationPermissionStatus.grantedPrecise;
-    // The watchdog reconciles access; a direct status event is the platform
-    // signal used in production when the user returns from settings.
-    device.serviceStatus.add(true);
-    await pumpEventQueue();
-    expect(device.permissionRequests, 0);
-    expect(nav.status, NavigationStatus.active);
-  });
+      device.permission = LocationPermissionStatus.grantedPrecise;
+      // The watchdog reconciles access; a direct status event is the platform
+      // signal used in production when the user returns from settings.
+      device.serviceStatus.add(true);
+      await pumpEventQueue();
+      expect(device.permissionRequests, 1);
+      expect(nav.status, NavigationStatus.active);
+    },
+  );
 
   test('rapid on/off toggles never create duplicate subscriptions', () async {
     device.current = _fix(latitude: 60.00005);
@@ -260,7 +252,10 @@ void main() {
     device.current = _fix(latitude: 60.0002);
     await pumpEventQueue();
 
-    expect(device.positionListens - device.positionCancels, lessThanOrEqualTo(1));
+    expect(
+      device.positionListens - device.positionCancels,
+      lessThanOrEqualTo(1),
+    );
     expect(device.serviceListens, 1);
     expect(nav.status, NavigationStatus.active);
   });
@@ -335,10 +330,7 @@ void main() {
     device.serviceStatus.add(true);
     await pumpEventQueue();
     device.positions.add(
-      _fix(
-        latitude: 60.0001,
-        age: const Duration(seconds: 30),
-      ),
+      _fix(latitude: 60.0001, age: const Duration(seconds: 30)),
     );
     await pumpEventQueue();
     expect(nav.isCompleted, isFalse);

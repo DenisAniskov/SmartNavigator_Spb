@@ -318,6 +318,9 @@ class _MainMapScreenState extends State<MainMapScreen>
         context,
         listen: false,
       )?.setForeground(true);
+      // P2: at most one bounded catalog recovery per return to the
+      // foreground; the provider throttles rapid resumes itself.
+      Provider.of<PlacesProvider?>(context, listen: false)?.setForeground(true);
       Provider.of<NavigationProvider?>(
         context,
         listen: false,
@@ -344,6 +347,11 @@ class _MainMapScreenState extends State<MainMapScreen>
         listen: false,
       )?.pauseNavigation();
       Provider.of<LocationProvider?>(
+        context,
+        listen: false,
+      )?.setForeground(false);
+      // P2: no catalog recovery timers or requests survive a hidden app.
+      Provider.of<PlacesProvider?>(
         context,
         listen: false,
       )?.setForeground(false);
@@ -716,8 +724,123 @@ class _MainMapScreenState extends State<MainMapScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (places.hasError)
-          line(places.errorMessage ?? 'Не удалось загрузить места'),
+        if (places.hasError) ...[
+          if (places.places.isEmpty) ...[
+            // The catalog never arrived: one honest message and one obvious
+            // way to recover. Lives in the top panel, so map controls,
+            // route actions and navigation are never covered.
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.wifi_off, size: 14, color: palette.error),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Не удалось загрузить достопримечательности. '
+                      'Проверьте интернет — мы попробуем подключиться снова.',
+                      style: TextStyle(fontSize: 11, color: palette.error),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (places.errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  places.errorMessage!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10, color: palette.textMuted),
+                ),
+              ),
+            if (places.isRetrying)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: palette.textMuted,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        places.nextRetryAt == null
+                            ? 'Восстанавливаем соединение…'
+                            : 'Восстанавливаем соединение… Повторим '
+                                  'автоматически через несколько секунд.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: palette.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: FilledButton.tonalIcon(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  textStyle: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                onPressed: places.isLoading ? null : () => places.loadPlaces(),
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Повторить загрузку'),
+              ),
+            ),
+          ] else
+            line(places.errorMessage ?? 'Не удалось загрузить места'),
+        ],
+        if (places.isStale && !places.isLoading)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.history, size: 14, color: palette.textSecondary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Не удалось обновить данные. Показаны ранее загруженные '
+                    'места.',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: palette.textSecondary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    textStyle: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onPressed: places.isLoading
+                      ? null
+                      : () => places.loadPlaces(),
+                  child: const Text('Повторить'),
+                ),
+              ],
+            ),
+          ),
         if (routing.errorMessage != null) line(routing.errorMessage!),
         if (search?.errorMessage != null)
           line('Адреса Яндекса: ${search!.errorMessage}'),
